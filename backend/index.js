@@ -13,6 +13,7 @@ const app=express()
 app.use(cors({
     origin:"http://localhost:5173",
     credentials:true
+    
 }))
 const port=process.env.PORT || 5000
 app.use(express.json())
@@ -23,6 +24,6 @@ app.use("/api/user",userRouter)
 
 app.listen(port,()=>{
     connectDb()
-    console.log("server started")
+    console.log(`server started at port ${port}`)
 })
 
