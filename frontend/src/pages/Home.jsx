@@ -13,10 +13,15 @@ function Home() {
   const [listening, setListening] = useState(false);
   const [userText, setUserText] = useState("");
   const [aiText, setAiText] = useState("");
+  const [chatHistory, setChatHistory] = useState([]);
+  const [isMicOn, setIsMicOn] = useState(true);
+  const cacheRef = useRef({});
   const isSpeakingRef = useRef(false);
   const recognitionRef = useRef(null);
   const [ham, setHam] = useState(false);
   const isRecognizingRef = useRef(false);
+  const lastTextRef = useRef("");
+  const pauseListeningRef = useRef(false);
   const synth = window.speechSynthesis;
 
   const handleLogOut = async () => {
@@ -31,7 +36,7 @@ function Home() {
   };
 
   const startRecognition = () => {
-    if (!isSpeakingRef.current && !isRecognizingRef.current) {
+    if (!isSpeakingRef.current && !isRecognizingRef.current && !pauseListeningRef.current) {
       try {
         recognitionRef.current?.start();
         console.log("Recognition requested to start");
@@ -54,9 +59,11 @@ function Home() {
     utterance.onend = () => {
       setAiText("");
       isSpeakingRef.current = false;
-      setTimeout(() => {
-        startRecognition();
-      }, 1500);
+      if (!pauseListeningRef.current && isMicOn) {
+        setTimeout(() => {
+          startRecognition();
+        }, 1500);
+      }
     };
 
     synth.cancel();
@@ -75,10 +82,10 @@ function Home() {
     let isMounted = true;
 
     const startTimeout = setTimeout(() => {
-      if (isMounted && !isSpeakingRef.current && !isRecognizingRef.current) {
+      if (isMounted && !isSpeakingRef.current && !isRecognizingRef.current && isMicOn) {
         try {
           recognition.start();
-          console.log("Recognition requested to start");
+          console.log("Recognition started after delay");
         } catch (e) {
           if (e.name !== "InvalidStateError") console.error(e);
         }
@@ -93,15 +100,13 @@ function Home() {
     recognition.onend = () => {
       isRecognizingRef.current = false;
       setListening(false);
-      if (isMounted && !isSpeakingRef.current) {
+      if (isMounted && !isSpeakingRef.current && !pauseListeningRef.current && isMicOn) {
         setTimeout(() => {
-          if (isMounted) {
-            try {
-              recognition.start();
-              console.log("Recognition restarted");
-            } catch (e) {
-              if (e.name !== "InvalidStateError") console.error(e);
-            }
+          try {
+            recognition.start();
+            console.log("Recognition restarted");
+          } catch (e) {
+            if (e.name !== "InvalidStateError") console.error(e);
           }
         }, 1000);
       }
@@ -111,28 +116,23 @@ function Home() {
       console.warn("Recognition error:", event.error);
       isRecognizingRef.current = false;
       setListening(false);
-      if (event.error === "network") {
-        console.log("⛔ Network error: check internet or HTTPS.");
-        return;
-      }
-      if (event.error !== "aborted" && isMounted && !isSpeakingRef.current) {
+      if (event.error !== "aborted" && isMounted && !isSpeakingRef.current && isMicOn) {
         setTimeout(() => {
-          if (isMounted) {
-            try {
-              recognition.start();
-              console.log("Recognition restarted after error");
-            } catch (e) {
-              if (e.name !== "InvalidStateError") console.error(e);
-            }
+          try {
+            recognition.start();
+            console.log("Recognition restarted after error");
+          } catch (e) {
+            if (e.name !== "InvalidStateError") console.error(e);
           }
         }, 3000);
       }
     };
 
-    // ✅ Main updated logic here
     recognition.onresult = async (e) => {
       const transcript = e.results[e.results.length - 1][0].transcript.trim();
-      console.log("Heard:", transcript);
+
+      if (transcript === lastTextRef.current) return;
+      lastTextRef.current = transcript;
 
       setAiText("");
       setUserText(transcript);
@@ -140,44 +140,74 @@ function Home() {
       isRecognizingRef.current = false;
       setListening(false);
 
+      if (transcript.toLowerCase() === "stop listening") {
+        if (isMicOn) {
+          setIsMicOn(false);
+          pauseListeningRef.current = true;
+          speak("Okay, I will stop listening.");
+        }
+        return;
+      }
+
+      if (transcript.toLowerCase() === "start listening") {
+        if (!isMicOn) {
+          setIsMicOn(true);
+          pauseListeningRef.current = false;
+          speak("I'm listening now.");
+          startRecognition();
+        }
+        return;
+      }
+
+      if (cacheRef.current[transcript]) {
+        const cached = cacheRef.current[transcript];
+        speak(cached.response);
+        setAiText(cached.response);
+        setChatHistory(prev => [...prev.slice(-4), { user: transcript, ai: cached.response }]);
+        return;
+      }
+
       try {
         const data = await getGeminiResponse(transcript);
-        console.log("Gemini response:", data);
         const { type, userInput, response } = data;
 
-        // ✅ Perform actual action here (this area is considered "trusted")
+        pauseListeningRef.current = true;
+
         if (type === 'google-search') {
-          const query = encodeURIComponent(userInput);
-          window.open(`https://www.google.com/search?q=${query}`, '_blank');
-        }
-
-        if (type === 'calculator-open') {
+          window.open(`https://www.google.com/search?q=${encodeURIComponent(userInput)}`, '_blank');
+        } else if (type === 'calculator-open') {
           window.open(`https://www.google.com/search?q=calculator`, '_blank');
-        }
-
-        if (type === "instagram-open") {
+        } else if (type === "instagram-open") {
           window.open(`https://www.instagram.com/`, '_blank');
-        }
-
-        if (type === "facebook-open") {
+        } else if (type === "facebook-open") {
           window.open(`https://www.facebook.com/`, '_blank');
-        }
-
-        if (type === "weather-show") {
+        } else if (type === "weather-show") {
           window.open(`https://www.google.com/search?q=weather`, '_blank');
+        } else if (type === 'youtube-search' || type === 'youtube-play' || type === 'youtube-open') {
+          window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(userInput)}`, '_blank');
+        } else if (type === 'linkedin-open') {
+          window.open(`https://www.linkedin.com/`, '_blank');
+        } else if (type === 'instagram-profile') {
+          window.open(`https://www.instagram.com/${userInput}`, '_blank');
+        } else if (type === 'linkedin-profile') {
+          window.open(`https://www.linkedin.com/in/${userInput}`, '_blank');
         }
 
-        if (type === 'youtube-search' || type === 'youtube-play' || type === 'youtube-open') {
-          const query = encodeURIComponent(userInput);
-          window.open(`https://www.youtube.com/results?search_query=${query}`, '_blank');
-        }
-
+        cacheRef.current[transcript] = data;
+        setChatHistory(prev => [...prev.slice(-4), { user: transcript, ai: response }]);
         speak(response);
         setAiText(response);
+
+        setTimeout(() => {
+          pauseListeningRef.current = false;
+          if (isMicOn) startRecognition();
+        }, 3000);
 
       } catch (err) {
         console.error("Error in AI response:", err);
         speak("Sorry, I couldn't understand that.");
+        pauseListeningRef.current = false;
+        if (isMicOn) startRecognition();
       }
 
       setUserText("");
@@ -198,6 +228,24 @@ function Home() {
 
   return (
     <div className='w-full h-[100vh] bg-gradient-to-t from-[black] to-[#02023d] flex justify-center items-center flex-col gap-[15px] overflow-hidden'>
+      {/* 🎤 Mic Toggle */}
+      <button
+        onClick={() => {
+          if (isMicOn) {
+            recognitionRef.current?.stop();
+            pauseListeningRef.current = true;
+            setIsMicOn(false);
+          } else {
+            pauseListeningRef.current = false;
+            startRecognition();
+            setIsMicOn(true);
+          }
+        }}
+        className="absolute top-[20px] left-[20px] text-white text-[16px] bg-blue-600 px-4 py-2 rounded-full z-50"
+      >
+        {isMicOn ? "🎤 Mic On" : "🔇 Mic Off"}
+      </button>
+
       <CgMenuRight className='lg:hidden text-white absolute top-[20px] right-[20px] w-[25px] h-[25px]' onClick={() => setHam(true)} />
       <div className={`absolute lg:hidden top-0 w-full h-full bg-[#00000053] backdrop-blur-lg p-[20px] flex flex-col gap-[20px] items-start ${ham ? "translate-x-0" : "translate-x-full"} transition-transform`}>
         <RxCross1 className=' text-white absolute top-[20px] right-[20px] w-[25px] h-[25px]' onClick={() => setHam(false)} />
@@ -219,6 +267,18 @@ function Home() {
         <img src={userData?.assistantImage} alt="" className='h-full object-cover' />
       </div>
       <h1 className='text-white text-[18px] font-semibold'>I'm {userData?.assistantName}</h1>
+
+      {/* 📝 Chat History */}
+      <div className="w-[90%] max-w-[600px] mt-4 bg-white/10 p-4 rounded-xl text-white">
+        <h2 className="font-bold mb-2">Last 5 Commands</h2>
+        {chatHistory.map((item, index) => (
+          <div key={index} className="mb-2">
+            <p><strong>You:</strong> {item.user}</p>
+            <p><strong>AI:</strong> {item.ai}</p>
+          </div>
+        ))}
+      </div>
+
       {!aiText && <img src={userImg} alt="" className='w-[200px]' />}
       {aiText && <img src={aiImg} alt="" className='w-[200px]' />}
       <h1 className='text-white text-[18px] font-semibold text-wrap'>{userText ? userText : aiText ? aiText : null}</h1>
