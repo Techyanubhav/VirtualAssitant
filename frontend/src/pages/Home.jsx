@@ -270,13 +270,25 @@ function Home() {
 
       {/* 📝 Chat History */}
       <div className="w-[90%] max-w-[600px] mt-4 bg-white/10 p-4 rounded-xl text-white">
-        <h2 className="font-bold mb-2">Last 5 Commands</h2>
-        {chatHistory.map((item, index) => (
-          <div key={index} className="mb-2">
-            <p><strong>You:</strong> {item.user}</p>
-            <p><strong>AI:</strong> {item.ai}</p>
-          </div>
-        ))}
+        <div className="flex justify-between items-center mb-2">
+          <h2 className="font-bold">Last 5 Commands</h2>
+          <button
+            onClick={() => setChatHistory([])}
+            className="bg-red-500 text-white px-3 py-1 text-sm rounded-full hover:bg-red-600 transition"
+          >
+            🧹 Clear
+          </button>
+        </div>
+        {chatHistory.length === 0 ? (
+          <p className="text-gray-300 italic">No recent commands.</p>
+        ) : (
+          chatHistory.map((item, index) => (
+            <div key={index} className="mb-2">
+              <p><strong>You:</strong> {item.user}</p>
+              <p><strong>AI:</strong> {item.ai}</p>
+            </div>
+          ))
+        )}
       </div>
 
       {!aiText && <img src={userImg} alt="" className='w-[200px]' />}
