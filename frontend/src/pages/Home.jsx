@@ -128,19 +128,47 @@ function Home() {
 
         pauseListeningRef.current = true;
 
-        if (["google-search", "youtube-search", "youtube-play", "calculator-open", "instagram-open", "facebook-open", "weather-show"].includes(type)) {
-          const query = encodeURIComponent(userInput);
-          const urlMap = {
-            "google-search": `https://www.google.com/search?q=${query}`,
-            "youtube-search": `https://www.youtube.com/results?search_query=${query}`,
-            "youtube-play": `https://www.youtube.com/results?search_query=${query}`,
-            "calculator-open": `https://www.google.com/search?q=calculator`,
-            "instagram-open": `https://www.instagram.com/`,
-            "facebook-open": `https://www.facebook.com/`,
-            "weather-show": `https://www.google.com/search?q=weather`,
-          };
-          window.open(urlMap[type], '_blank');
-        }
+      if ([
+  "google-search",
+  "youtube-search",
+  "youtube-play",
+  "calculator-open",
+  "instagram-open",
+  "facebook-open",
+  "weather-show",
+  "wikipedia-search",
+  "translate",
+  "gmail-open",
+  "maps-search",
+  "news-search",
+  "notepad-open",
+  "currency-convert",
+  "timer",
+  "linkedin-open",
+  "chatgpt-open"
+].includes(type)) {
+  const query = encodeURIComponent(userInput);
+  const urlMap = {
+    "google-search": `https://www.google.com/search?q=${query}`,
+    "youtube-search": `https://www.youtube.com/results?search_query=${query}`,
+    "youtube-play": `https://www.youtube.com/results?search_query=${query}`,
+    "calculator-open": `https://www.google.com/search?q=calculator`,
+    "instagram-open": `https://www.instagram.com/`,
+    "facebook-open": `https://www.facebook.com/`,
+    "weather-show": `https://www.google.com/search?q=weather`,
+    "wikipedia-search": `https://en.wikipedia.org/wiki/Special:Search?search=${query}`,
+    "translate": `https://translate.google.com/?sl=auto&tl=en&text=${query}&op=translate`,
+    "gmail-open": `https://mail.google.com/`,
+    "maps-search": `https://www.google.com/maps/search/${query}`,
+    "news-search": `https://news.google.com/search?q=${query}`,
+    "notepad-open": `https://anotepad.com/`,
+    "currency-convert": `https://www.google.com/search?q=${query}+to+INR`,
+    "timer": `https://www.google.com/search?q=timer`,
+    "linkedin-open": `https://www.linkedin.com/`,
+    "chatgpt-open": `https://chat.openai.com/`
+  };
+  window.open(urlMap[type], '_blank');
+}
 
         cacheRef.current[transcript] = data;
         speak(response);
